@@ -56,7 +56,7 @@ Raise `version` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`,
 build, then publish the installer:
 
 ```bash
-gh release create v0.1.0 src-tauri/target/release/bundle/nsis/alo_0.1.0_x64-setup.exe --title "alo 0.1.0"
+gh release create v0.1.1 src-tauri/target/release/bundle/nsis/alo_0.1.1_x64-setup.exe --title "alo 0.1.1"
 ```
 
 ## License
