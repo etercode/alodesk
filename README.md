@@ -53,10 +53,14 @@ A debug build (`cargo tauri dev`) also opens the DevTools protocol on
 ## Release
 
 Raise `version` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`,
-build, then publish the installer:
+build, then publish the installer twice: under its own name, and as
+`alo-setup.exe`, which the "Download the desktop app" button on
+alo.devl0pr.com links to (`releases/latest/download/alo-setup.exe`):
 
 ```bash
-gh release create v0.1.1 src-tauri/target/release/bundle/nsis/alo_0.1.1_x64-setup.exe --title "alo 0.1.1"
+v=0.1.1
+cp src-tauri/target/release/bundle/nsis/alo_${v}_x64-setup.exe /tmp/alo-setup.exe
+gh release create v$v src-tauri/target/release/bundle/nsis/alo_${v}_x64-setup.exe /tmp/alo-setup.exe --title "alo $v"
 ```
 
 ## License
