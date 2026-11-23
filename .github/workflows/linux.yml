@@ -1,0 +1,58 @@
+# Builds the Linux app (electron/) and adds it to a release: on every
+# published release (release.ps1 publishes the Windows app), or by hand for an
+# existing tag. Installed Linux apps read latest-linux.yml from the release.
+name: Linux app
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release to add it to (vX.Y.Z)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        working-directory: electron
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: electron/package-lock.json
+
+      - name: The version is the tag's
+        run: test "v$(node -p 'require("./package.json").version')" = "$TAG"
+
+      - name: Libraries the global keys load (libuiohook)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxtst6 libxt6 libxrandr2
+
+      - run: npm ci
+      - run: npm test
+      - run: npx electron-builder --linux --publish never
+
+      # Under their own names (latest-linux.yml names them), and under fixed
+      # ones for the site's download button (releases/latest/download/...).
+      - name: Add to the release
+        run: |
+          v="${TAG#v}"
+          cd dist
+          cp "alo_${v}_amd64.deb" alo-linux-amd64.deb
+          cp "alo_${v}_x86_64.AppImage" alo-linux-x86_64.AppImage
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            "alo_${v}_amd64.deb" "alo_${v}_x86_64.AppImage" latest-linux.yml \
+            alo-linux-amd64.deb alo-linux-x86_64.AppImage
