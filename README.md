@@ -1,22 +1,29 @@
 # alodesk
 
-The alo desktop app for Windows. It is a Tauri 2 window that shows the live
-site, https://alo.devl0pr.com, so every alo-sk deploy reaches the app at
-once; a new app version is needed only when this shell changes, and the
-installed apps fetch it themselves (see "Updates"). Linux and macOS people use
-the website.
+The alo desktop apps. Each is a window that shows the live site,
+https://alo.devl0pr.com, so every alo-sk deploy reaches the apps at once; a
+new app version is needed only when the shell changes, and the installed apps
+fetch it themselves (see "Updates").
+
+- **Windows**: a Tauri 2 app (`src-tauri/`), 2 MB.
+- **Linux**: an Electron app (`electron/`, "Linux app" below). On Linux, Tauri
+  would use WebKitGTK, which cannot run alo's voice (WebCodecs Opus) and video
+  reliably; Electron brings Chrome's engine. macOS comes later, the same way.
 
 ## Download
 
-Get `alo_<version>_x64-setup.exe` from the
-[latest release](https://github.com/etercode/alodesk/releases/latest) and run
-it. It installs for your Windows user only (no admin rights) and puts alo in
-the Start menu.
+Get them from the [latest release](https://github.com/etercode/alodesk/releases/latest):
 
-The installer is not code-signed yet, so Windows SmartScreen may say "Windows
-protected your PC" the first time. Click **More info**, then **Run anyway**.
+- **Windows**: `alo-setup.exe`. It installs for your Windows user only (no
+  admin rights) and puts alo in the Start menu. It is not code-signed yet, so
+  Windows SmartScreen may say "Windows protected your PC" the first time.
+  Click **More info**, then **Run anyway**.
+- **Pardus, Debian, Ubuntu, Mint**: `alo-linux-amd64.deb`. Open it (the
+  package installer asks for your password), or `sudo apt install ./alo-linux-amd64.deb`.
+- **Other Linux**: `alo-linux-x86_64.AppImage`. Allow it to run as a program
+  and open it (it needs FUSE 2: `libfuse2`).
 
-## What it adds to the website
+## What the Windows app adds to the website
 
 | feature | how |
 | --- | --- |
@@ -37,7 +44,38 @@ Only `https://alo.devl0pr.com/*` may call the app (`capabilities/remote.json`):
 the push-to-talk key, the mute and deafen keys, events and notifications. The site's address is in
 `src-tauri/src/lib.rs` (`ORIGIN`, `INSIDE`, `is_alo`) and in that capability.
 
-## Build
+## Linux app (`electron/`)
+
+The same things, through Electron (`src/main.js`); the site sees
+`window.aloDesktop` (`src/preload.js`) instead of `window.__TAURI__`, and
+alo-sk's `native.js` speaks to either.
+
+| feature | how |
+| --- | --- |
+| push-to-talk, mute and deafen keys while another app has focus | `src/keys.js` with uiohook (libuiohook) hears the keys of the X11 session without taking them. **Under Wayland** (GNOME on Wayland) an app cannot hear other apps' keys; there the keys work while alo has focus. Pardus Xfce is X11. |
+| microphone, camera, notifications without a prompt | for alo only (`setPermissionRequestHandler`) |
+| screen share | our own picker of screens and windows (`src/picker.html`) on X11; the system's dialog under Wayland |
+| tray icon | close hides to it; Open, Reload, Start with the computer (`~/.config/autostart/alo.desktop`), Quit. GNOME shows tray icons only with the AppIndicator extension; starting alo again always shows the window. |
+| `alo://` links, one copy, links in the browser, feelm sign-in, size and place | as on Windows; the .deb registers `alo://` |
+| updates of itself | `src/updates.js`, electron-updater, from `latest-linux.yml` in the latest release. The AppImage installs a newer version at start; the .deb needs the computer's password, so it only offers "Restart to update" in the tray. Files are checked by their SHA-512. |
+
+Build and run it on Linux (WSL works, with WSLg):
+
+```bash
+cd electron
+npm ci
+npm test                                    # key names
+ALO_ORIGIN=http://localhost:5178 npm start  # against a local alo; DevTools on 9230
+npm run dist                                # dist/alo_X.Y.Z_amd64.deb and .AppImage
+```
+
+Releases build it on GitHub (`.github/workflows/linux.yml`): publishing a
+release starts it, and it adds `alo_X.Y.Z_amd64.deb`, `alo_X.Y.Z_x86_64.AppImage`,
+`latest-linux.yml`, and the same two files as `alo-linux-amd64.deb` and
+`alo-linux-x86_64.AppImage` for the site's download button. For an existing
+release: `gh workflow run linux.yml -f tag=vX.Y.Z`.
+
+## Build (Windows)
 
 Needs Rust (MSVC toolchain), the Visual Studio C++ Build Tools and WebView2
 (Windows 11 has it). No Node.
@@ -53,7 +91,7 @@ cd src-tauri && cargo test         # push-to-talk keys, links, permissions
 A debug build (`cargo tauri dev`) also opens the DevTools protocol on
 127.0.0.1:9229 for testing; a release build does not.
 
-## Updates
+## Updates (Windows)
 
 From 0.1.2 the app updates itself (`src-tauri/src/update.rs`, with
 `tauri-plugin-updater`). It reads `latest.json` from the latest GitHub
@@ -71,8 +109,8 @@ older than 0.1.2 have no updater: their people install 0.1.2 by hand once.
 
 ## Release
 
-Raise `version` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`,
-then:
+Raise `version` in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and
+`electron/package.json` (the script checks they agree), then:
 
 ```powershell
 .\release.ps1 -Notes "What changed, in a sentence"
@@ -82,7 +120,8 @@ It builds, signs the installer with the private key, and publishes release
 `vX.Y.Z` with three files: `alo_X.Y.Z_x64-setup.exe`, `alo-setup.exe` (the
 "Download the desktop app" button on alo.devl0pr.com links to
 `releases/latest/download/alo-setup.exe`) and `latest.json` (what installed
-apps check). `-BuildOnly` stops before the release.
+apps check). `-BuildOnly` stops before the release. The published release
+starts the Linux build on GitHub, which adds the Linux files a few minutes later.
 
 The private key is `%USERPROFILE%\.tauri\alo-updater.key` (no password), and
 never goes into this repository. **Keep a copy of it somewhere safe:**

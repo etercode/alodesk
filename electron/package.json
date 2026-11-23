@@ -1,0 +1,86 @@
+{
+  "name": "alo",
+  "productName": "alo",
+  "desktopName": "alo.desktop",
+  "version": "0.1.2",
+  "description": "The alo desktop app for Linux: alo.devl0pr.com in a window, with global push-to-talk",
+  "homepage": "https://alo.devl0pr.com",
+  "author": "devl0pr",
+  "license": "MIT",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "dist": "electron-builder --linux --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11",
+    "uiohook-napi": "1.5.5"
+  },
+  "devDependencies": {
+    "electron": "45.4.1",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.devl0pr.alo",
+    "productName": "alo",
+    "executableName": "alo",
+    "npmRebuild": false,
+    "artifactName": "alo_${version}_${arch}.${ext}",
+    "files": [
+      "src/**",
+      "assets/**",
+      "package.json"
+    ],
+    "protocols": [
+      {
+        "name": "alo",
+        "schemes": [
+          "alo"
+        ]
+      }
+    ],
+    "linux": {
+      "target": [
+        "deb",
+        "AppImage"
+      ],
+      "icon": "assets/icon.png",
+      "syncDesktopName": true,
+      "category": "Network",
+      "maintainer": "devl0pr",
+      "synopsis": "Voice and text chat",
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "alo",
+          "Keywords": "voice;chat;talk;"
+        }
+      }
+    },
+    "deb": {
+      "packageName": "alo",
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "libxt6",
+        "libxrandr2",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "libpulse0"
+      ]
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "etercode",
+        "repo": "alodesk"
+      }
+    ]
+  }
+}

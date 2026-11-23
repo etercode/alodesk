@@ -1,2 +1,4 @@
 /src-tauri/target/
 /src-tauri/gen/
+/electron/node_modules/
+/electron/dist/
