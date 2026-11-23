@@ -20,6 +20,7 @@ protected your PC" the first time. Click **More info**, then **Run anyway**.
 | feature | how |
 | --- | --- |
 | push-to-talk while another app has focus | `src-tauri/src/ptt.rs` watches the one key (GetAsyncKeyState) and sends a `ptt` event; alo-sk listens in `src/lib/state/native.js`. The key still types in other apps. |
+| mute and deafen keys while another app has focus | the same thread watches the two hotkeys from alo's Voice settings (`Control+Shift+KeyM`: exactly these modifiers, either side) and sends a `hotkey` event, `mute` or `deafen`, once for each push. From 0.1.2. |
 | microphone and camera without a prompt | for alo.devl0pr.com only (`allow_media` in `lib.rs`); other pages get WebView2's prompt. Windows' privacy settings still apply. |
 | tray icon | close hides to the tray; the menu has Open, Reload, Start with Windows and Quit |
 | start with Windows | a check box in the tray menu, off at first; starts hidden in the tray |
@@ -31,7 +32,7 @@ protected your PC" the first time. Click **More info**, then **Run anyway**.
 | remembered size and place | `tauri-plugin-window-state` |
 
 Only `https://alo.devl0pr.com/*` may call the app (`capabilities/remote.json`):
-the push-to-talk key, events and notifications. The site's address is in
+the push-to-talk key, the mute and deafen keys, events and notifications. The site's address is in
 `src-tauri/src/lib.rs` (`ORIGIN`, `INSIDE`, `is_alo`) and in that capability.
 
 ## Build
@@ -58,7 +59,7 @@ build, then publish the installer twice: under its own name, and as
 alo.devl0pr.com links to (`releases/latest/download/alo-setup.exe`):
 
 ```bash
-v=0.1.1
+v=0.1.2
 cp src-tauri/target/release/bundle/nsis/alo_${v}_x64-setup.exe /tmp/alo-setup.exe
 gh release create v$v src-tauri/target/release/bundle/nsis/alo_${v}_x64-setup.exe /tmp/alo-setup.exe --title "alo $v"
 ```

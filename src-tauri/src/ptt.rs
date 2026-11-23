@@ -1,17 +1,19 @@
-//! Global push-to-talk.
+//! Global push-to-talk, and the mute and deafen hotkeys.
 //!
 //! A web page sees keys only while it has focus. Here a thread asks Windows
-//! for the state of the one push-to-talk key (GetAsyncKeyState) every 10 ms
-//! and tells the page with a `ptt` event (true = down, false = up). Unlike a
-//! registered hotkey this does not swallow the key: it still types in other
-//! apps, as in Discord. While alo's own window has focus the page handles the
-//! key itself (and knows when a text field has focus), so the thread stays
-//! quiet then.
+//! for the state of the keys (GetAsyncKeyState) every 10 ms and tells the
+//! page: a `ptt` event while the push-to-talk key goes down and up (true,
+//! false), a `hotkey` event ("mute" or "deafen") when one of those is pushed.
+//! Unlike a registered hotkey this does not swallow the key: it still types
+//! in other apps, as in Discord. While alo's own window has focus the page
+//! handles the keys itself (and knows when a text field has focus), so the
+//! thread stays quiet then.
 //!
-//! The page names the key as `KeyboardEvent.code` (`KeyV`, `F13`,
+//! The page names a key as `KeyboardEvent.code` (`KeyV`, `F13`,
 //! `ShiftLeft`...), which is the physical key. Keys whose virtual-key code
 //! depends on the keyboard layout go through their scan code, so `KeyQ` is
-//! the same physical key on a Turkish or Azerbaijani layout.
+//! the same physical key on a Turkish or Azerbaijani layout. A hotkey adds
+//! the modifiers before it: `Control+Shift+KeyM` (alo-sk's util/hotkey.js).
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -21,6 +23,50 @@ use tauri::{AppHandle, Emitter, Manager};
 #[derive(Default)]
 pub struct Ptt {
     vk: Mutex<Option<u16>>,
+    mute: Mutex<Option<Combo>>,
+    deafen: Mutex<Option<Combo>>,
+}
+
+/// A key and exactly these modifiers, either side.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Combo {
+    vk: u16,
+    control: bool,
+    alt: bool,
+    shift: bool,
+    meta: bool,
+}
+
+const VK_SHIFT: u16 = 0x10;
+const VK_CONTROL: u16 = 0x11;
+const VK_MENU: u16 = 0x12;
+const VK_LWIN: u16 = 0x5B;
+const VK_RWIN: u16 = 0x5C;
+
+impl Combo {
+    fn parse(text: &str) -> Option<Combo> {
+        let mut parts: Vec<&str> = text.split('+').collect();
+        let vk = vk_for_code(parts.pop()?)?;
+        let mut combo = Combo { vk, control: false, alt: false, shift: false, meta: false };
+        for part in parts {
+            match part {
+                "Control" => combo.control = true,
+                "Alt" => combo.alt = true,
+                "Shift" => combo.shift = true,
+                "Meta" => combo.meta = true,
+                _ => return None,
+            }
+        }
+        Some(combo)
+    }
+
+    fn is_down(&self, down: impl Fn(u16) -> bool) -> bool {
+        down(self.vk)
+            && down(VK_CONTROL) == self.control
+            && down(VK_MENU) == self.alt
+            && down(VK_SHIFT) == self.shift
+            && (down(VK_LWIN) || down(VK_RWIN)) == self.meta
+    }
 }
 
 /// The page calls this whenever the push-to-talk key or the mode changes.
@@ -33,6 +79,17 @@ pub fn set_ptt_key(state: tauri::State<'_, Arc<Ptt>>, code: Option<String>) -> b
     code.is_none() || vk.is_some()
 }
 
+/// The page calls this whenever the mute or deafen hotkey changes; `None` for
+/// no key. Returns false when one of them is a key this app cannot watch.
+#[tauri::command]
+pub fn set_hotkeys(state: tauri::State<'_, Arc<Ptt>>, mute: Option<String>, deafen: Option<String>) -> bool {
+    let mute_combo = mute.as_deref().and_then(Combo::parse);
+    let deafen_combo = deafen.as_deref().and_then(Combo::parse);
+    *state.mute.lock().unwrap() = mute_combo;
+    *state.deafen.lock().unwrap() = deafen_combo;
+    (mute.is_none() || mute_combo.is_some()) && (deafen.is_none() || deafen_combo.is_some())
+}
+
 pub fn start(app: AppHandle, ptt: Arc<Ptt>) {
     std::thread::Builder::new()
         .name("ptt".into())
@@ -40,17 +97,24 @@ pub fn start(app: AppHandle, ptt: Arc<Ptt>) {
             let mut down = false;
             // Whether the page was told "down" by us, so it also hears "up".
             let mut told = false;
+            // The hotkeys fire once when pushed, not again while held.
+            let mut mute_down = false;
+            let mut deafen_down = false;
+            let focused = || {
+                app.get_webview_window("main")
+                    .and_then(|w| w.is_focused().ok())
+                    .unwrap_or(false)
+            };
             loop {
                 let vk = *ptt.vk.lock().unwrap();
+                let mute = *ptt.mute.lock().unwrap();
+                let deafen = *ptt.deafen.lock().unwrap();
+
                 let now = vk.is_some_and(is_down);
                 if now != down {
                     down = now;
                     if down {
-                        let focused = app
-                            .get_webview_window("main")
-                            .and_then(|w| w.is_focused().ok())
-                            .unwrap_or(false);
-                        if !focused {
+                        if !focused() {
                             let _ = app.emit_to("main", "ptt", true);
                             told = true;
                         }
@@ -59,7 +123,17 @@ pub fn start(app: AppHandle, ptt: Arc<Ptt>) {
                         told = false;
                     }
                 }
-                std::thread::sleep(Duration::from_millis(if vk.is_some() { 10 } else { 250 }));
+
+                for (combo, was, name) in [(mute, &mut mute_down, "mute"), (deafen, &mut deafen_down, "deafen")] {
+                    let now = combo.is_some_and(|c| c.is_down(is_down));
+                    if now && !*was && !focused() {
+                        let _ = app.emit_to("main", "hotkey", name);
+                    }
+                    *was = now;
+                }
+
+                let watching = vk.is_some() || mute.is_some() || deafen.is_some();
+                std::thread::sleep(Duration::from_millis(if watching { 10 } else { 250 }));
             }
         })
         .expect("failed to start the push-to-talk thread");
@@ -138,7 +212,24 @@ fn vk_for_code(code: &str) -> Option<u16> {
 
 #[cfg(test)]
 mod tests {
-    use super::vk_for_code;
+    use super::{vk_for_code, Combo, VK_CONTROL, VK_LWIN, VK_SHIFT};
+
+    #[test]
+    fn combos() {
+        let combo = Combo::parse("Control+Shift+F9").unwrap();
+        assert_eq!(combo, Combo { vk: 0x78, control: true, alt: false, shift: true, meta: false });
+        assert_eq!(Combo::parse("F9").map(|c| c.control), Some(false));
+        assert_eq!(Combo::parse("Hyper+F9"), None);
+        assert_eq!(Combo::parse("Control+Nope"), None);
+        assert_eq!(Combo::parse(""), None);
+
+        // Exactly the modifiers: Ctrl+Shift+F9 is not Ctrl+F9, nor Win+Ctrl+Shift+F9.
+        let held = |keys: &'static [u16]| move |vk: u16| keys.contains(&vk);
+        assert!(combo.is_down(held(&[VK_CONTROL, VK_SHIFT, 0x78])));
+        assert!(!combo.is_down(held(&[VK_CONTROL, 0x78])));
+        assert!(!combo.is_down(held(&[VK_CONTROL, VK_SHIFT, VK_LWIN, 0x78])));
+        assert!(!combo.is_down(held(&[VK_CONTROL, VK_SHIFT])));
+    }
 
     #[test]
     fn fixed_keys() {

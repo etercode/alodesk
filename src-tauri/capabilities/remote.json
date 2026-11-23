@@ -10,6 +10,7 @@
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "notification:default",
-    "allow-set-ptt-key"
+    "allow-set-ptt-key",
+    "allow-set-hotkeys"
   ]
 }

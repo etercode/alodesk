@@ -44,7 +44,7 @@ pub fn run() {
                 .build(),
         )
         .manage(Arc::new(ptt::Ptt::default()))
-        .invoke_handler(tauri::generate_handler![ptt::set_ptt_key])
+        .invoke_handler(tauri::generate_handler![ptt::set_ptt_key, ptt::set_hotkeys])
         .setup(|app| {
             let handle = app.handle().clone();
             let minimized = std::env::args().any(|arg| arg == MINIMIZED);

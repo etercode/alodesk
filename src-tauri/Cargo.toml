@@ -1,6 +1,6 @@
 [package]
 name = "alodesk"
-version = "0.1.1"
+version = "0.1.2"
 description = "The alo desktop app: alo.devl0pr.com in a window, with global push-to-talk"
 edition = "2021"
 publish = false
