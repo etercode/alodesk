@@ -2,8 +2,9 @@
 
 The alo desktop app for Windows. It is a Tauri 2 window that shows the live
 site, https://alo.devl0pr.com, so every alo-sk deploy reaches the app at
-once; a new app version is needed only when this shell changes. Linux and
-macOS people use the website.
+once; a new app version is needed only when this shell changes, and the
+installed apps fetch it themselves (see "Updates"). Linux and macOS people use
+the website.
 
 ## Download
 
@@ -22,7 +23,8 @@ protected your PC" the first time. Click **More info**, then **Run anyway**.
 | push-to-talk while another app has focus | `src-tauri/src/ptt.rs` watches the one key (GetAsyncKeyState) and sends a `ptt` event; alo-sk listens in `src/lib/state/native.js`. The key still types in other apps. |
 | mute and deafen keys while another app has focus | the same thread watches the two hotkeys from alo's Voice settings (`Control+Shift+KeyM`: exactly these modifiers, either side) and sends a `hotkey` event, `mute` or `deafen`, once for each push. From 0.1.2. |
 | microphone and camera without a prompt | for alo.devl0pr.com only (`allow_media` in `lib.rs`); other pages get WebView2's prompt. Windows' privacy settings still apply. |
-| tray icon | close hides to the tray; the menu has Open, Reload, Start with Windows and Quit |
+| tray icon | close hides to the tray; the menu shows the version (or "Restart to update") and has Open, Reload, Start with Windows and Quit |
+| updates of itself | from the latest GitHub release, signed; see "Updates" |
 | start with Windows | a check box in the tray menu, off at first; starts hidden in the tray |
 | `alo://invite/CODE`, `alo://open` | opens the invite in the window, or brings the window to the front (the installer registers `alo://`) |
 | sign-in with feelm | opens in the default browser, because Google refuses to sign in inside an app's window. The browser leaves the one-time code at alo-api, and the waiting app takes it (alo-api's README, "Sign-in with feelm"). |
@@ -51,18 +53,43 @@ cd src-tauri && cargo test         # push-to-talk keys, links, permissions
 A debug build (`cargo tauri dev`) also opens the DevTools protocol on
 127.0.0.1:9229 for testing; a release build does not.
 
+## Updates
+
+From 0.1.2 the app updates itself (`src-tauri/src/update.rs`, with
+`tauri-plugin-updater`). It reads `latest.json` from the latest GitHub
+release:
+
+- **at start**, a newer version is downloaded and installed at once (a small
+  progress bar, no questions), and alo starts again. Nobody is in a call yet.
+- **while it runs**, it looks every six hours and only downloads. The first
+  line of the tray menu becomes "Restart to update to X", with a notification,
+  so an update never ends a call. Otherwise the next start installs it.
+
+Every download is checked against the public key in `tauri.conf.json`
+(`plugins.updater.pubkey`); a file with a wrong signature is refused. Apps
+older than 0.1.2 have no updater: their people install 0.1.2 by hand once.
+
 ## Release
 
 Raise `version` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`,
-build, then publish the installer twice: under its own name, and as
-`alo-setup.exe`, which the "Download the desktop app" button on
-alo.devl0pr.com links to (`releases/latest/download/alo-setup.exe`):
+then:
 
-```bash
-v=0.1.2
-cp src-tauri/target/release/bundle/nsis/alo_${v}_x64-setup.exe /tmp/alo-setup.exe
-gh release create v$v src-tauri/target/release/bundle/nsis/alo_${v}_x64-setup.exe /tmp/alo-setup.exe --title "alo $v"
+```powershell
+.\release.ps1 -Notes "What changed, in a sentence"
 ```
+
+It builds, signs the installer with the private key, and publishes release
+`vX.Y.Z` with three files: `alo_X.Y.Z_x64-setup.exe`, `alo-setup.exe` (the
+"Download the desktop app" button on alo.devl0pr.com links to
+`releases/latest/download/alo-setup.exe`) and `latest.json` (what installed
+apps check). `-BuildOnly` stops before the release.
+
+The private key is `%USERPROFILE%\.tauri\alo-updater.key` (no password), and
+never goes into this repository. **Keep a copy of it somewhere safe:**
+without it no update can reach the installed apps again, and a new key means
+every person installs by hand once more. Anybody with it could sign an
+update, so it stays private. `TAURI_SIGNING_PRIVATE_KEY` (a path or the key
+itself) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` override where it is read.
 
 ## License
 

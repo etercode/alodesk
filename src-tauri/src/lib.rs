@@ -1,8 +1,9 @@
 //! The alo desktop app: the live site (alo.devl0pr.com) in a window, plus what
 //! a browser tab cannot do: push-to-talk while another app has focus, a tray
-//! icon, start with Windows, and `alo://invite/CODE` links.
+//! icon, start with Windows, `alo://invite/CODE` links, and updates of itself.
 
 mod ptt;
+mod update;
 
 use std::sync::Arc;
 
@@ -43,7 +44,9 @@ pub fn run() {
                 .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
                 .build(),
         )
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Arc::new(ptt::Ptt::default()))
+        .manage(update::Pending::default())
         .invoke_handler(tauri::generate_handler![ptt::set_ptt_key, ptt::set_hotkeys])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -62,7 +65,8 @@ pub fn run() {
             app.deep_link().on_open_url(move |event| open_links(&links, &event.urls()));
 
             let state = app.state::<Arc<ptt::Ptt>>().inner().clone();
-            ptt::start(handle, state);
+            ptt::start(handle.clone(), state);
+            update::start(handle);
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -245,6 +249,10 @@ mod tests {
 }
 
 fn tray(app: &AppHandle) -> tauri::Result<()> {
+    // The version, until an update waits (update.rs).
+    let version = format!("alo {}", app.package_info().version);
+    let line = MenuItem::with_id(app, "update", version, false, None::<&str>)?;
+    app.manage(update::TrayLine(line.clone()));
     let open = MenuItem::with_id(app, "open", "Open alo", true, None::<&str>)?;
     let reload = MenuItem::with_id(app, "reload", "Reload", true, None::<&str>)?;
     let autostart = CheckMenuItem::with_id(
@@ -257,7 +265,8 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
     )?;
     let quit = MenuItem::with_id(app, "quit", "Quit alo", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&open, &reload, &autostart, &separator, &quit])?;
+    let top = PredefinedMenuItem::separator(app)?;
+    let menu = Menu::with_items(app, &[&line, &top, &open, &reload, &autostart, &separator, &quit])?;
 
     let toggle = autostart.clone();
     let mut tray = TrayIconBuilder::with_id("alo")
@@ -280,6 +289,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
                 let _ = toggle.set_checked(launch.is_enabled().unwrap_or(!on));
             }
             "quit" => app.exit(0),
+            "update" => update::install_pending(app),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
