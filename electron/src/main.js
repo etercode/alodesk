@@ -35,11 +35,28 @@ function isAlo(url) {
 	}
 }
 
-// Keep voice, timers and sounds running while the window is hidden in the tray or behind a game.
+// Timers keep their pace and the page its priority while the window is in the tray or behind a
+// game, so voice and push-to-talk never lag. The page itself does count as hidden then: it stops
+// drawing and pauses the videos, and a game keeps the graphics card.
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
-app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
+// The app's own settings, needed before the window exists (the site cannot keep them): for now
+// whether it draws with the graphics card. A change takes effect at the next start.
+const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json');
+
+function readPrefs() {
+	try {
+		const saved = JSON.parse(fs.readFileSync(prefsFile(), 'utf8'));
+		return { hardwareAcceleration: saved.hardwareAcceleration !== false };
+	} catch {
+		return { hardwareAcceleration: true };
+	}
+}
+
+const running = readPrefs();
+if (!running.hardwareAcceleration) app.disableHardwareAcceleration();
 // A development run opens the DevTools protocol for testing; a packaged app does not.
 if (!app.isPackaged) app.commandLine.appendSwitch('remote-debugging-port', process.env.ALO_DEBUG_PORT || '9230');
 
@@ -72,6 +89,21 @@ function ready() {
 	);
 	ipcMain.handle('alo:set-push-key', (event, code) => fromAlo(event) && keys.setPush(String(code)));
 	ipcMain.handle('alo:set-hotkeys', (event, mute, deafen) => fromAlo(event) && keys.setHotkeys(String(mute), String(deafen)));
+	ipcMain.handle('alo:get-hardware-acceleration', (event) =>
+		fromAlo(event) ? { on: readPrefs().hardwareAcceleration, running: running.hardwareAcceleration } : null
+	);
+	ipcMain.handle('alo:set-hardware-acceleration', (event, on) => {
+		if (!fromAlo(event)) return false;
+		fs.mkdirSync(path.dirname(prefsFile()), { recursive: true });
+		fs.writeFileSync(prefsFile(), JSON.stringify({ ...readPrefs(), hardwareAcceleration: on === true }));
+		return true;
+	});
+	ipcMain.handle('alo:restart', (event) => {
+		if (!fromAlo(event)) return;
+		// An AppImage starts again from its own file, not from the folder it unpacked to.
+		app.relaunch(process.env.APPIMAGE ? { execPath: process.env.APPIMAGE, args: [] } : undefined);
+		app.quit();
+	});
 	updates.start(refreshTray);
 	openLinks(process.argv);
 }
@@ -164,7 +196,9 @@ function createWindow(visible) {
 			preload: path.join(__dirname, 'preload.js'),
 			contextIsolation: true,
 			sandbox: true,
-			backgroundThrottling: false,
+			// Hidden (tray, minimized) the page counts as hidden: no drawing, no videos. The
+			// switches above keep its timers on time.
+			backgroundThrottling: true,
 			spellcheck: true
 		}
 	});

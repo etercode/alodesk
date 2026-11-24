@@ -11,6 +11,9 @@
     "core:event:allow-unlisten",
     "notification:default",
     "allow-set-ptt-key",
-    "allow-set-hotkeys"
+    "allow-set-hotkeys",
+    "allow-get-hardware-acceleration",
+    "allow-set-hardware-acceleration",
+    "allow-restart-app"
   ]
 }

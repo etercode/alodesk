@@ -2,8 +2,11 @@
 //! a browser tab cannot do: push-to-talk while another app has focus, a tray
 //! icon, start with Windows, `alo://invite/CODE` links, and updates of itself.
 
+mod prefs;
 mod ptt;
 mod update;
+#[cfg(windows)]
+mod visibility;
 
 use std::sync::Arc;
 
@@ -47,11 +50,19 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Arc::new(ptt::Ptt::default()))
         .manage(update::Pending::default())
-        .invoke_handler(tauri::generate_handler![ptt::set_ptt_key, ptt::set_hotkeys])
+        .invoke_handler(tauri::generate_handler![
+            ptt::set_ptt_key,
+            ptt::set_hotkeys,
+            prefs::get_hardware_acceleration,
+            prefs::set_hardware_acceleration,
+            prefs::restart_app
+        ])
         .setup(|app| {
             let handle = app.handle().clone();
             let minimized = std::env::args().any(|arg| arg == MINIMIZED);
-            window(&handle, !minimized)?;
+            let prefs = prefs::load(&handle);
+            app.manage(prefs::Running(prefs));
+            window(&handle, !minimized, prefs)?;
             tray(&handle)?;
 
             // alo:// links: the installer registers the scheme; this also
@@ -66,6 +77,8 @@ pub fn run() {
 
             let state = app.state::<Arc<ptt::Ptt>>().inner().clone();
             ptt::start(handle.clone(), state);
+            #[cfg(windows)]
+            visibility::start(handle.clone());
             update::start(handle);
             Ok(())
         })
@@ -73,16 +86,14 @@ pub fn run() {
         .expect("error while running alo");
 }
 
-fn window(app: &AppHandle, visible: bool) -> tauri::Result<()> {
+fn window(app: &AppHandle, visible: bool, prefs: prefs::Prefs) -> tauri::Result<()> {
     let outside = app.clone();
     let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(ORIGIN.parse().unwrap()))
         .title("alo")
         .inner_size(1280.0, 800.0)
         .min_inner_size(940.0, 560.0)
         .visible(visible)
-        // Tauri's own defaults, plus: keep voice, timers and sounds running
-        // while the window is hidden in the tray or behind a game.
-        .additional_browser_args(&browser_args())
+        .additional_browser_args(&browser_args(prefs.hardware_acceleration))
         .on_navigation(move |url| {
             if inside(url) {
                 return true;
@@ -149,17 +160,23 @@ fn is_alo(uri: &str) -> bool {
         .is_ok_and(|url| url.scheme() == "https" && url.host_str() == Some("alo.devl0pr.com"))
 }
 
-/// Tauri's own defaults, plus: keep voice, timers and sounds running while the
-/// window is hidden in the tray or behind a game. A debug build also opens
-/// the DevTools protocol on 127.0.0.1:9229 for testing.
-fn browser_args() -> String {
+/// Tauri's own defaults, plus: timers keep their pace and the page keeps its
+/// priority while the window is in the tray or behind a game, so voice and
+/// push-to-talk never lag. The page itself does count as hidden then
+/// (visibility.rs): it stops drawing and pauses the videos, and a game keeps
+/// the graphics card. Without hardware
+/// acceleration WebView2 draws on the processor. A debug build also opens the
+/// DevTools protocol on 127.0.0.1:9229 for testing.
+fn browser_args(hardware_acceleration: bool) -> String {
     let mut args = String::from(concat!(
         "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection ",
         "--disable-background-timer-throttling ",
         "--disable-renderer-backgrounding ",
-        "--disable-backgrounding-occluded-windows ",
         "--autoplay-policy=no-user-gesture-required"
     ));
+    if !hardware_acceleration {
+        args.push_str(" --disable-gpu");
+    }
     if cfg!(debug_assertions) {
         args.push_str(" --remote-debugging-port=9229");
     }

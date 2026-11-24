@@ -21,6 +21,12 @@ contextBridge.exposeInMainWorld('aloDesktop', {
 	setHotkeys: (mute, deafen) => ipcRenderer.invoke('alo:set-hotkeys', String(mute ?? ''), String(deafen ?? '')),
 	/** The push-to-talk key down (true) or up (false) in another app. Returns a stop function. */
 	onPush: (handler) => listen('alo:ptt', (value) => handler(value === true)),
+	/** { on, running }: the saved choice, and what this run uses. */
+	getHardwareAcceleration: () => ipcRenderer.invoke('alo:get-hardware-acceleration'),
+	/** Saved for the next start. */
+	setHardwareAcceleration: (on) => ipcRenderer.invoke('alo:set-hardware-acceleration', on === true),
+	/** Starts alo again, for a changed setting. */
+	restart: () => ipcRenderer.invoke('alo:restart'),
 	/** "mute" or "deafen", pushed in another app. Returns a stop function. */
 	onHotkey: (handler) =>
 		listen('alo:hotkey', (value) => {

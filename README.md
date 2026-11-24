@@ -39,9 +39,12 @@ Get them from the [latest release](https://github.com/etercode/alodesk/releases/
 | links | alo opens in the window, every other link in the default browser |
 | one copy | a second start shows the running one |
 | remembered size and place | `tauri-plugin-window-state` |
+| quiet behind a game | WebView2 does not notice by itself that nobody sees the window. `src-tauri/src/visibility.rs` looks twice a second: hidden in the tray, minimized, or under an app that fills its whole screen (a game) makes the page "hidden" (the controller's IsVisible), so it stops drawing and pauses videos, and the game keeps the graphics card. Voice, timers and push-to-talk go on (the page keeps its priority and its timers' pace). From 0.1.3. |
+| hardware acceleration | on at first; the site's Settings → Appearance turns it off (`--disable-gpu`, then the window draws on the processor) when games lose FPS. Kept in `prefs.json` in the app's config folder (`src-tauri/src/prefs.rs`), used at the next start; the site offers "Restart alo". From 0.1.3. |
 
 Only `https://alo.devl0pr.com/*` may call the app (`capabilities/remote.json`):
-the push-to-talk key, the mute and deafen keys, events and notifications. The site's address is in
+the push-to-talk key, the mute and deafen keys, hardware acceleration and a
+restart, events and notifications. The site's address is in
 `src-tauri/src/lib.rs` (`ORIGIN`, `INSIDE`, `is_alo`) and in that capability.
 
 ## Linux app (`electron/`)
@@ -57,6 +60,8 @@ alo-sk's `native.js` speaks to either.
 | screen share | our own picker of screens and windows (`src/picker.html`) on X11; the system's dialog under Wayland |
 | tray icon | close hides to it; Open, Reload, Start with the computer (`~/.config/autostart/alo.desktop`), Quit. GNOME shows tray icons only with the AppIndicator extension; starting alo again always shows the window. |
 | `alo://` links, one copy, links in the browser, feelm sign-in, size and place | as on Windows; the .deb registers `alo://` |
+| quiet when hidden | in the tray or minimized the page counts as hidden (Chromium's own; `backgroundThrottling` on), so it stops drawing and pauses videos; switches keep its timers and priority for voice. From 0.1.3. |
+| hardware acceleration | as on Windows (`app.disableHardwareAcceleration()`), kept in `prefs.json` in the app's user data folder |
 | updates of itself | `src/updates.js`, electron-updater, from `latest-linux.yml` in the latest release. The AppImage installs a newer version at start; the .deb needs the computer's password, so it only offers "Restart to update" in the tray. Files are checked by their SHA-512. |
 
 Build and run it on Linux (WSL works, with WSLg):
