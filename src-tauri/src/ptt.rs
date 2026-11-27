@@ -14,6 +14,8 @@
 //! depends on the keyboard layout go through their scan code, so `KeyQ` is
 //! the same physical key on a Turkish or Azerbaijani layout. A hotkey adds
 //! the modifiers before it: `Control+Shift+KeyM` (alo-sk's util/hotkey.js).
+//! Push-to-talk may also be a mouse button: `Mouse3` (the wheel), `Mouse4`
+//! and `Mouse5` (the side buttons).
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -194,6 +196,9 @@ fn vk_for_code(code: &str) -> Option<u16> {
         return (n <= 9).then(|| 0x60 + n);
     }
     let vk = match code {
+        // Mouse buttons for push-to-talk (alo-sk's util/format.js, mouseCode):
+        // the wheel and the two side buttons. GetAsyncKeyState knows them too.
+        "Mouse3" => 0x04, "Mouse4" => 0x05, "Mouse5" => 0x06,
         "Space" => 0x20, "Tab" => 0x09, "CapsLock" => 0x14, "Backspace" => 0x08, "Enter" => 0x0D,
         "ShiftLeft" => 0xA0, "ShiftRight" => 0xA1,
         "ControlLeft" => 0xA2, "ControlRight" => 0xA3,
@@ -238,6 +243,10 @@ mod tests {
         assert_eq!(vk_for_code("F25"), None);
         assert_eq!(vk_for_code("Numpad5"), Some(0x65));
         assert_eq!(vk_for_code("ShiftLeft"), Some(0xA0));
+        assert_eq!(vk_for_code("Mouse3"), Some(0x04));
+        assert_eq!(vk_for_code("Mouse4"), Some(0x05));
+        assert_eq!(vk_for_code("Mouse5"), Some(0x06));
+        assert_eq!(vk_for_code("Mouse1"), None);
         assert_eq!(vk_for_code("Nope"), None);
     }
 

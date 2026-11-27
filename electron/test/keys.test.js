@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { UiohookKey } = require('uiohook-napi');
-const { keycode, parseCombo } = require('../src/keys');
+const { keycode, mouseButton, parseCombo } = require('../src/keys');
 
 test('key codes from KeyboardEvent.code', () => {
 	assert.equal(keycode('KeyV'), UiohookKey.V);
@@ -15,6 +15,16 @@ test('key codes from KeyboardEvent.code', () => {
 	assert.equal(keycode('Numpad5'), UiohookKey.Numpad5);
 	assert.equal(keycode('Nope'), null);
 	assert.equal(keycode('constructor'), null);
+});
+
+test('mouse buttons for push-to-talk', () => {
+	assert.equal(mouseButton('Mouse3'), 3);
+	assert.equal(mouseButton('Mouse4'), 4);
+	assert.equal(mouseButton('Mouse5'), 5);
+	// Left and right click: never.
+	assert.equal(mouseButton('Mouse1'), null);
+	assert.equal(mouseButton('KeyV'), null);
+	assert.equal(mouseButton('constructor'), null);
 });
 
 test('hotkeys with their modifiers', () => {

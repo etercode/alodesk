@@ -27,7 +27,7 @@ Get them from the [latest release](https://github.com/etercode/alodesk/releases/
 
 | feature | how |
 | --- | --- |
-| push-to-talk while another app has focus | `src-tauri/src/ptt.rs` watches the one key (GetAsyncKeyState) and sends a `ptt` event; alo-sk listens in `src/lib/state/native.js`. The key still types in other apps. |
+| push-to-talk while another app has focus | `src-tauri/src/ptt.rs` watches the one key (GetAsyncKeyState) and sends a `ptt` event; alo-sk listens in `src/lib/state/native.js`. The key still types in other apps. From 0.1.4 it may be a mouse button: `Mouse3` (the wheel), `Mouse4` or `Mouse5` (the side buttons). |
 | mute and deafen keys while another app has focus | the same thread watches the two hotkeys from alo's Voice settings (`Control+Shift+KeyM`: exactly these modifiers, either side) and sends a `hotkey` event, `mute` or `deafen`, once for each push. From 0.1.2. |
 | microphone and camera without a prompt | for alo.devl0pr.com only (`allow_media` in `lib.rs`); other pages get WebView2's prompt. Windows' privacy settings still apply. |
 | tray icon | close hides to the tray; the menu shows the version (or "Restart to update") and has Open, Reload, Start with Windows and Quit |
@@ -55,7 +55,7 @@ alo-sk's `native.js` speaks to either.
 
 | feature | how |
 | --- | --- |
-| push-to-talk, mute and deafen keys while another app has focus | `src/keys.js` with uiohook (libuiohook) hears the keys of the X11 session without taking them. **Under Wayland** (GNOME on Wayland) an app cannot hear other apps' keys; there the keys work while alo has focus. Pardus Xfce is X11. |
+| push-to-talk, mute and deafen keys while another app has focus | `src/keys.js` with uiohook (libuiohook) hears the keys of the X11 session without taking them, and from 0.1.4 the mouse wheel and side buttons for push-to-talk (libuiohook's buttons 3, 4, 5). **Under Wayland** (GNOME on Wayland) an app cannot hear other apps' keys; there the keys work while alo has focus. Pardus Xfce is X11. |
 | microphone, camera, notifications without a prompt | for alo only (`setPermissionRequestHandler`) |
 | screen share | our own picker of screens and windows (`src/picker.html`) on X11; the system's dialog under Wayland |
 | tray icon | close hides to it; Open, Reload, Start with the computer (`~/.config/autostart/alo.desktop`), Quit. GNOME shows tray icons only with the AppIndicator extension; starting alo again always shows the window. |

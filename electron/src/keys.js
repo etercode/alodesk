@@ -38,6 +38,15 @@ function keycode(code) {
 	return typeof value === 'number' ? value : null;
 }
 
+// Push-to-talk may be a mouse button too (alo-sk's util/format.js, mouseCode):
+// the wheel and the two side buttons, as libuiohook numbers them.
+const MOUSE = { Mouse3: 3, Mouse4: 4, Mouse5: 5 };
+
+/** uiohook's button for "Mouse4" and the like, or null. @param {string} code */
+function mouseButton(code) {
+	return Object.prototype.hasOwnProperty.call(MOUSE, code) ? MOUSE[code] : null;
+}
+
 /** "Control+Shift+KeyM" → the key and exactly these modifiers, or null. @param {string} text */
 function parseCombo(text) {
 	const parts = text.split('+');
@@ -63,6 +72,7 @@ class Keys {
 		this.send = send;
 		this.focused = focused;
 		this.ptt = null;
+		this.pttMouse = null;
 		this.combos = { mute: null, deafen: null };
 		this.down = new Set();
 		this.told = false;
@@ -70,13 +80,16 @@ class Keys {
 		this.failed = false;
 		uIOhook.on('keydown', (event) => this.#keydown(event));
 		uIOhook.on('keyup', (event) => this.#keyup(event));
+		uIOhook.on('mousedown', (event) => this.#mouse(event, true));
+		uIOhook.on('mouseup', (event) => this.#mouse(event, false));
 	}
 
 	/** '' for none. Returns false for a key this app cannot watch. @param {string} code */
 	setPush(code) {
-		this.ptt = code ? keycode(code) : null;
+		this.pttMouse = code ? mouseButton(code) : null;
+		this.ptt = code && this.pttMouse === null ? keycode(code) : null;
 		this.#update();
-		return !code || (this.ptt !== null && !this.failed);
+		return !code || ((this.ptt !== null || this.pttMouse !== null) && !this.failed);
 	}
 
 	/** '' for none. Returns false when one of them cannot be watched. @param {string} mute @param {string} deafen */
@@ -87,7 +100,7 @@ class Keys {
 	}
 
 	#update() {
-		const needed = this.ptt !== null || !!this.combos.mute || !!this.combos.deafen;
+		const needed = this.ptt !== null || this.pttMouse !== null || !!this.combos.mute || !!this.combos.deafen;
 		if (needed && !this.running && !this.failed) {
 			try {
 				uIOhook.start();
@@ -128,6 +141,19 @@ class Keys {
 		}
 	}
 
+	/** The push-to-talk mouse button, down or up, in another app. */
+	#mouse(event, down) {
+		if (this.pttMouse === null || event.button !== this.pttMouse) return;
+		if (down) {
+			if (this.focused()) return;
+			this.send('alo:ptt', true);
+			this.told = true;
+		} else if (this.told) {
+			this.send('alo:ptt', false);
+			this.told = false;
+		}
+	}
+
 	#keyup(event) {
 		this.down.delete(event.keycode);
 		if (event.keycode === this.ptt && this.told) {
@@ -137,4 +163,4 @@ class Keys {
 	}
 }
 
-module.exports = { Keys, keycode, parseCombo };
+module.exports = { Keys, keycode, mouseButton, parseCombo };
